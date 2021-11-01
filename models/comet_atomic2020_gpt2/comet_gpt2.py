@@ -18,7 +18,8 @@ import wandb
 import logging
 
 from torch import cuda
-
+import sys
+sys.path.append("/home/tfangaa/projects/comet-atomic-2020")
 from split.utils import write_items
 
 from optparse import OptionParser
@@ -38,39 +39,87 @@ from mosaic.datasets.KGDataset import KGDataset
 DEBUG = False
 NUM_INST = 100
 
+CS_RELATIONS_2NL = {
+    "AtLocation": "located or found at or in or on",
+    "CapableOf": "is or are capable of",
+    "Causes" : "causes",
+    "CausesDesire": "makes someone want",
+    "CreatedBy": " is created by",
+    "Desires": "desires",
+    "HasA": "has, possesses, or contains",
+    "HasFirstSubevent": "begins with the event or action",
+    "HasLastSubevent": "ends with the event or action",
+    "HasPrerequisite": "to do this, one requires",
+    "HasProperty": "can be characterized by being or having",
+    "HasSubEvent" : "includes the event or action",
+    "HinderedBy" : "can be hindered by",
+    "InstanceOf" : " is an example or instance of",
+    "isAfter" : "happens after",
+    "isBefore" : "happens before",
+    "isFilledBy" : "blank can be filled by",
+    "MadeOf": "is made of",
+    "MadeUpOf": "made up of",
+    "MotivatedByGoal": "is a step towards accomplishing the goal",
+    "NotDesires": "do not desire",
+    "ObjectUse": "used for",
+    "UsedFor": "used for",
+    "oEffect" : "as a result, PersonY or others will",
+    "oReact" : "as a result, PersonY or others feel",
+    "oWant" : "as a result, PersonY or others want to",
+    "PartOf" : "is a part of",
+    "ReceivesAction" : "can receive or be affected by the action",
+    "xAttr" : "PersonX is seen as",
+    "xEffect" : "as a result, PersonX will",
+    "xReact" : "as a result, PersonX feels",
+    "xWant" : "as a result, PersonX wants to",
+    "xNeed" : "but before, PersonX needed",
+    "xIntent" : "because PersonX wanted",
+    "xReason" : "because",
+    "general Effect" : "as a result, other people or things will",
+    "general Want" : "as a result, other people or things want to",
+    "general React" : "as a result, other people or things feel",
+}
 
 def read_jsonl_lines(input_file: str) -> List[dict]:
     with open(input_file) as f:
         lines = f.readlines()
         return [json.loads(l.strip()) for l in lines]
 
+# CSKB_POP COMET: CUDA_VISIBLE_DEVICES=2 EVAL_EVERY=100 TRAIN_BATCH_SIZE=32 DO_TRAIN=True DO_PRED=False TRAIN_DATA_PATH=data/kg/pop_cskb/trn.tsv DEV_DATA_PATH=data/kg/pop_cskb/dev.tsv OUT_DIR=data/models/gpt2large-comet-pop TOKENIZER=gpt2-large GPT2_MODEL=gpt2-large
+# COMET with NL relations: CUDA_VISIBLE_DEVICES=3 EVAL_EVERY=100 USE_NL_RELATION=True TRAIN_BATCH_SIZE=32 DO_TRAIN=True DO_PRED=False OUT_DIR=data/models/gpt2large-comet-nl-rel TOKENIZER=gpt2-large GPT2_MODEL=gpt2-large
 
 def main():
-    wandb.init(project="gpt2_comet_atomic")
+    # wandb.init(project="gpt2_comet_atomic")
 
     config = wandb.config
-    config.TRAIN_BATCH_SIZE = int(os.environ.get("TRAIN_BATCH_SIZE", 2))
-    config.VALID_BATCH_SIZE = int(os.environ.get("VALID_BATCH_SIZE", 2))
+    config.TRAIN_BATCH_SIZE = int(os.environ.get("TRAIN_BATCH_SIZE", 2)) # 32 for the official release
+    config.VALID_BATCH_SIZE = int(os.environ.get("VALID_BATCH_SIZE", 2)) 
     config.TRAIN_EPOCHS = int(os.environ.get("TRAIN_EPOCHS", 3))
     config.VAL_EPOCHS = int(os.environ.get("VAL_EPOCHS", 1))
-    config.LEARNING_RATE = float(os.environ.get("LEARNING_RATE", "1e-5"))
+    config.LEARNING_RATE = float(os.environ.get("LEARNING_RATE", "1e-5")) # 5e-5 for the official release
     config.SEED = int(os.environ.get("SEED", 42))
     config.IN_LEN = int(os.environ.get("IN_LEN", 16))
     config.OUT_LEN = int(os.environ.get("OUT_LEN", 34))
     config.SUMMARY_LEN = 0 # Used for t5
-    config.OUT_DIR = os.environ.get("OUT_DIR", "/models")
-    config.DO_TRAIN = os.environ.get("DO_TRAIN", "False") == "True"
-    config.DO_PRED = os.environ.get("DO_PRED", "True") == "True"
-    config.PRED_FILE = str(os.environ.get("PRED_FILE", ""))
-    config.TOP_K = int(os.environ.get("TOP_K", 40))
+    config.OUT_DIR = os.environ.get("OUT_DIR", "decodings")
+    config.DO_TRAIN =  os.environ.get("DO_TRAIN", "False") == "True"
+    config.DO_PRED = os.environ.get("DO_PRED", "False") == "True"
+    config.PRED_FILE = str(os.environ.get("PRED_FILE", "data/kg/atomic2020_data-feb2021/test.tsv"))
+    config.TOP_K = int(os.environ.get("TOP_K", 40)) # Num of top_k word considered in each step of beam search
     config.PRED_BATCH = 64
-    config.TOKENIZER = os.environ.get('TOKENIZER', "gpt2-xl")
+    config.TOKENIZER = os.environ.get('TOKENIZER', "gpt2-xl") # "data/models/gpt2xl-comet-atomic-2020/tokenizer/"
+    config.NUM_GEN = int(os.environ.get("NUM_GEN", 1))
+    config.MODEL_NAME = os.environ.get('GPT2_MODEL', "gpt2-xl")
+    config.SAVE_EVERY = int(os.environ.get('SAVE_EVERY', -1))
+    config.EVAL_EVERY = int(os.environ.get('EVAL_EVERY', -1))
+    config.USE_NL_RELATION = bool(os.environ.get('USE_NL_RELATION', "False")=="True") # whether to use natural language descriptions for the relations.
 
     torch.manual_seed(config.SEED)  # pytorch random seed
     np.random.seed(config.SEED)  # numpy random seed
     torch.backends.cudnn.deterministic = True
 
-    model_name = "gpt2" if 'GPT2_MODEL' not in os.environ else os.environ['GPT2_MODEL']
+    model_name = config.MODEL_NAME
+    # model_name = "data/models/gpt2xl-comet-atomic-2020/"
 
     try:
         tokenizer = GPT2Tokenizer.from_pretrained(model_name)
@@ -137,45 +186,58 @@ def main():
     tokenizer.add_special_tokens({'pad_token': '[PAD]'})
 
     train_dataset = pd.read_csv(
-        os.environ.get('TRAIN_DATA_PATH', "/tmp/gpt2data/atomic_train.tsv"),
+        os.environ.get('TRAIN_DATA_PATH', "data/kg/atomic2020_data-feb2021/train.tsv"),
         encoding='latin-1', sep="\t")
     if DEBUG:
         train_dataset = train_dataset.head(NUM_INST)
     # train_dataset = train_dataset[['head_event', 'tail_event', 'relation']]
-    train_dataset.head_event = train_dataset.head_event + ' ' + train_dataset.relation \
+    if config.USE_NL_RELATION:
+        train_dataset["head_event"] = train_dataset["head_event"] + ' ' + \
+            pd.Series(map(lambda r:CS_RELATIONS_2NL[r], train_dataset["relation"])) \
+            + " [GEN]"
+    else:  
+        train_dataset["head_event"] = train_dataset["head_event"] + ' ' + train_dataset["relation"] \
                                + " [GEN]"
-    train_dataset.tail_event = train_dataset.tail_event + ' [EOS]'
+    train_dataset["tail_event"] = train_dataset["tail_event"] + ' [EOS]'
     logger.info(train_dataset.head())
-    logger.info(train_dataset.tail_event)
+    logger.info(train_dataset["tail_event"])
 
-    val_dataset = pd.read_csv(os.environ.get('DEV_DATA_PATH', "/tmp/gpt2data/atomic_dev.tsv"), encoding='latin-1', sep="\t")
+    val_dataset = pd.read_csv(os.environ.get('DEV_DATA_PATH', "data/kg/atomic2020_data-feb2021/dev.tsv"), encoding='latin-1', sep="\t")
     if DEBUG:
         val_dataset = val_dataset.head(NUM_INST)
     val_dataset = val_dataset[['head_event', 'tail_event', 'relation']]
-    val_dataset.head_event = val_dataset.head_event + ' ' + val_dataset.relation + " [GEN]"
-    val_dataset.tail_event = val_dataset.tail_event + ' [EOS]'
-    logger.info(val_dataset.tail_event)
+    if config.USE_NL_RELATION:
+        val_dataset["head_event"] = val_dataset["head_event"] + ' ' + \
+            pd.Series(map(lambda r:CS_RELATIONS_2NL[r], val_dataset["relation"])) + " [GEN]"
+    else:
+        val_dataset["head_event"] = val_dataset["head_event"] + ' ' + val_dataset["relation"] + " [GEN]"
+    val_dataset["tail_event"] = val_dataset["tail_event"] + ' [EOS]'
+    logger.info(val_dataset["tail_event"])
     logger.info(val_dataset.head())
 
-    test_dataset = pd.read_csv(os.environ.get('TEST_DATA_PATH', "/tmp/gpt2data/atomic_test.tsv"), encoding='latin-1', sep="\t")
+    test_dataset = pd.read_csv(os.environ.get('TEST_DATA_PATH', "data/kg/atomic2020_data-feb2021/test.tsv"), encoding='latin-1', sep="\t")
     if DEBUG:
         test_dataset = test_dataset.head(NUM_INST)
     test_dataset = test_dataset[['head_event', 'tail_event', 'relation']]
-    test_dataset.head_event = test_dataset.head_event + ' ' + test_dataset.relation \
+    if config.USE_NL_RELATION:
+        test_dataset["head_event"] = test_dataset["head_event"] + ' ' + \
+        pd.Series(map(lambda r:CS_RELATIONS_2NL[r], test_dataset["relation"])) + " [GEN]"
+    else:
+        test_dataset["head_event"] = test_dataset["head_event"] + ' ' + test_dataset["relation"] \
                               + " [GEN]"
-    test_dataset.tail_event = test_dataset.tail_event + ' [EOS]'
-    logger.info(test_dataset.tail_event)
+    test_dataset["tail_event"] = test_dataset["tail_event"] + ' [EOS]'
+    logger.info(test_dataset["tail_event"])
     logger.info(test_dataset.head())
 
-    val_dataset_mini = pd.read_csv(os.environ.get('DEV_DATA_PATH', "/tmp/gpt2data/atomic_dev.tsv"), encoding='latin-1', sep="\t")
+    val_dataset_mini = pd.read_csv(os.environ.get('DEV_DATA_PATH', "data/kg/atomic2020_data-feb2021/dev.tsv"), encoding='latin-1', sep="\t")
     if DEBUG:
         val_dataset_mini = val_dataset_mini.head(5)
     val_dataset_mini = val_dataset_mini.sample(n=min(int(val_dataset_mini.size / 3), 100),
                                                random_state=config.SEED)
     val_dataset_mini = val_dataset_mini[['head_event', 'tail_event', 'relation']]
-    val_dataset_mini.head_event = val_dataset_mini.head_event + ' ' + val_dataset_mini.relation + " [GEN]"
-    val_dataset_mini.tail_event = val_dataset_mini.tail_event + ' [EOS]'
-    logger.info(val_dataset_mini.tail_event)
+    val_dataset_mini["head_event"] = val_dataset_mini["head_event"] + ' ' + val_dataset_mini["relation"] + " [GEN]"
+    val_dataset_mini["tail_event"] = val_dataset_mini["tail_event"] + ' [EOS]'
+    logger.info(val_dataset_mini["tail_event"])
     logger.info(val_dataset_mini.head())
 
     logger.info("TRAIN Dataset tuple count: {}".format(train_dataset.shape))
@@ -212,16 +274,17 @@ def main():
 
     optimizer = torch.optim.Adam(params=model.parameters(), lr=config.LEARNING_RATE)
 
-    wandb.watch(model, log="all")
+    # wandb.watch(model, log="all")
 
     if config.DO_TRAIN:
         logger.info('Initiating Fine-Tuning for the model on our dataset')
 
         for epoch in range(config.TRAIN_EPOCHS):
-            train(epoch, tokenizer, model, device, training_loader, optimizer, val_loader_mini, model_class="gpt2")
-            model.save_pretrained('{}/checkpoint_{}'.format(config.OUT_DIR, epoch))
-            tokenizer.save_pretrained('{}/checkpoint_{}'.format(config.OUT_DIR, epoch))
-        model.save_pretrained('/models')
+            train(epoch, tokenizer, model, device, training_loader, optimizer, val_loader_mini, 
+                model_class="gpt2", save_dir=config.OUT_DIR, save_every=config.SAVE_EVERY, eval_every=config.EVAL_EVERY)
+            model.save_pretrained('{}/checkpoint_{}_{}'.format(config.OUT_DIR, model_name, epoch))
+            tokenizer.save_pretrained('{}/tokenizer_checkpoint_{}_{}'.format(config.OUT_DIR, model_name, epoch))
+        model.save_pretrained('{}/final_model_{}.pt'.format(config.OUT_DIR, model_name))
 
     if config.DO_PRED:
 
@@ -237,22 +300,25 @@ def main():
             pred_dataset = pred_dataset.head(NUM_INST)
 
         pred_dataset = pred_dataset.drop_duplicates(['head_event', 'relation'], ignore_index=True)
-
-        pred_dataset.head_event = pred_dataset.head_event + ' ' + pred_dataset.relation + " [GEN]"
-        pred_dataset.tail_event = pred_dataset.tail_event + ' [EOS]'
-        logger.info(pred_dataset.tail_event)
+        if config.USE_NL_RELATION:
+            pred_dataset["head_event"] = pred_dataset["head_event"] + ' ' + \
+                pd.Series(map(lambda r:CS_RELATIONS_2NL[r], pred_dataset["relation"])) + " [GEN]"
+        else:
+            pred_dataset["head_event"] = pred_dataset["head_event"] + ' ' + pred_dataset["relation"] + " [GEN]"
+        pred_dataset["tail_event"] = pred_dataset["tail_event"] + ' [EOS]'
+        logger.info(pred_dataset["tail_event"])
         logger.info(pred_dataset.head())
 
         pred_set = KGDataset(pred_dataset, tokenizer, config.IN_LEN, config.OUT_LEN - config.IN_LEN, model="gpt2", is_eval=True)
         pred_loader = DataLoader(pred_set, **val_params, drop_last=False)
 
-        pred_generations = beam_generations(tokenizer, model, device, pred_loader, top_k=config.TOP_K)
-        write_items(os.path.join(config.OUT_DIR, "pred_generations.jsonl"),
+        pred_generations = beam_generations(tokenizer, model, device, pred_loader, top_k=config.TOP_K, num_gen=config.NUM_GEN)
+        write_items(os.path.join(config.OUT_DIR, os.path.basename(config.PRED_FILE)+"_pred_generations.jsonl"),
                     [json.dumps(r) for r in pred_generations])
 
         # Resave the model to keep generations and model associated
-        model.save_pretrained('/models')
-        tokenizer.save_pretrained('/models')
+        # model.save_pretrained('/models')
+        # tokenizer.save_pretrained('/models')
 
 if __name__ == '__main__':
     parser = OptionParser()

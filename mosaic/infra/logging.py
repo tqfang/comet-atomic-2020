@@ -39,5 +39,7 @@ def log_eval(epoch, tokenizer, model, device, loader, sample_limit=5000, model_c
             loss = outputs[0]
             total_loss += loss.item()
             loss_count += 1
-    wandb.log({"Eval Loss": total_loss / loss_count})
+    # wandb.log({"Eval Loss": total_loss / loss_count})
+    print("here")
     logger.info("Eval Loss: {}".format(total_loss / loss_count))
+    return total_loss / loss_count

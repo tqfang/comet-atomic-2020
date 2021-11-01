@@ -21,7 +21,8 @@ from mosaic.infra.logging import log_eval
 
 
 def train(epoch, tokenizer, model, device, loader, optimizer, val_loader=None, model_class="t5",
-          save_dir="/models"):
+          save_dir="/models", save_every=-1, eval_every=-1):
+    best_val_loss = float("+inf")
     model.train()
     batch_count = len(loader)
     for iteration, data in tqdm(enumerate(loader, 0)):
@@ -40,26 +41,29 @@ def train(epoch, tokenizer, model, device, loader, optimizer, val_loader=None, m
         loss = outputs[0]
 
         if iteration % 100 == 0:
-            wandb.log({"Training Loss": loss.item(), "Epoch": epoch,
+            logger.info({"Training Loss": loss.item(), "Epoch": epoch,
                        "Batches left": batch_count - iteration})
             batches_left = batch_count - iteration
             logger.info(
                 f'\nEpoch: {epoch}, Iteration: {iteration}, Loss:  {loss.item()}, Batches left: {batches_left}')
 
-        if iteration % 500 == 0:
-            logger.info(f'\nEpoch: {epoch}, Loss:  {loss.item()}, BatchesLeft: {batches_left}')
 
-        if iteration % 5000 == 0:
-            model.save_pretrained(save_dir + "/iter_{}_model".format(iteration))
-            tokenizer.save_pretrained(save_dir + "/iter_{}_tokenizer".format(iteration))
 
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
 
-        if iteration % 100 == 0 and val_loader != None:
-            log_eval(epoch, tokenizer, model, device, val_loader, model_class=model_class)
+        if eval_every > 0 and iteration % eval_every == 0 and val_loader != None:
+            eval_loss = log_eval(epoch, tokenizer, model, device, val_loader, model_class=model_class)
+            if eval_loss < best_val_loss:
+                best_val_loss = eval_loss
+                model.save_pretrained(save_dir + "/best_{}_model".format(iteration))
+                tokenizer.save_pretrained(save_dir + "/best_{}_tokenizer".format(iteration))
             model.train()
+        if save_every > 0 and iteration % save_every == 0:
+            logger.info(f'\nEpoch: {epoch}, Loss:  {loss.item()}, BatchesLeft: {batches_left}')
+            model.save_pretrained(save_dir + "/iter_{}_model".format(iteration))
+            tokenizer.save_pretrained(save_dir + "/iter_{}_tokenizer".format(iteration))
 
 
 def validate(epoch, tokenizer, model, device, loader):
@@ -102,7 +106,7 @@ def validate(epoch, tokenizer, model, device, loader):
     return sources, predictions, actuals
 
 
-def beam_generations(tokenizer, model, device, loader, top_k=40):
+def beam_generations(tokenizer, model, device, loader, top_k=40, num_gen=10, out_len=34):
     # This method assumes batch size of 1
     model.eval()
     predictions = []
@@ -120,11 +124,12 @@ def beam_generations(tokenizer, model, device, loader, top_k=40):
                 attention_mask=mask,
                 temperature=1.0,
                 do_sample=False,
-                max_length=int(os.environ['OUT_LEN']),
+                max_length=out_len,
                 top_p=0.9,
                 top_k=top_k,
                 repetition_penalty=1.0,
-                num_return_sequences=10 if top_k > 1 else 1,
+                # num_return_sequences=10 if top_k > 1 else 1,
+                num_return_sequences=num_gen,
                 num_beams=10
             )
 

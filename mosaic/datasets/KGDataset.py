@@ -55,9 +55,9 @@ class KGDataset(Dataset):
             else:
                 source = self.tokenizer.batch_encode_plus([text + ' ' + ctext], pad_to_max_length=True, max_length=self.source_len + self.summ_len, return_tensors='pt', truncation=True)
                 target = source
-        if index < 5:
-            logger.info("Source: {}".format(self.tokenizer.batch_decode(source['input_ids'])))
-            logger.info("Target: {}".format(self.tokenizer.batch_decode(target['input_ids'])))
+        # if index < 5:
+        #     logger.info("Source: {}".format(self.tokenizer.batch_decode(source['input_ids'])))
+        #     logger.info("Target: {}".format(self.tokenizer.batch_decode(target['input_ids'])))
 
         source_ids = source['input_ids'].squeeze()
         source_mask = source['attention_mask'].squeeze()
