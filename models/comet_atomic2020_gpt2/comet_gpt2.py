@@ -19,7 +19,7 @@ import logging
 
 from torch import cuda
 import sys
-sys.path.append("/home/tfangaa/projects/comet-atomic-2020")
+sys.path.append("/data/quyet/comet-atomic-2020")
 from split.utils import write_items
 
 from optparse import OptionParser
@@ -180,6 +180,7 @@ def main():
             'CapableOf',
             'NotIsA',
             'ObjectUse',
+            'Inversed',
             '[GEN]'
         ]
     })
@@ -267,7 +268,7 @@ def main():
     val_loader_mini = DataLoader(val_set_mini, **val_params, drop_last=True)
     
     logging.info("Loading model from {}".format(model_name))
-    model = GPT2LMHeadModel.from_pretrained(model_name, use_cdn=False)
+    model = GPT2LMHeadModel.from_pretrained(model_name) #, use_cdn=False
     logging.info("Move model to device {}".format(device))
     model = model.to(device)
     model.resize_token_embeddings(len(tokenizer))
