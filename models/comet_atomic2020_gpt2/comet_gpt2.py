@@ -78,6 +78,45 @@ CS_RELATIONS_2NL = {
     "general Effect" : "as a result, other people or things will",
     "general Want" : "as a result, other people or things want to",
     "general React" : "as a result, other people or things feel",
+    # inversed
+    "AtLocation inversed": "can find or include", # "located or found at or in or on"
+    "CapableOf inversed": "is a skill of", # "is or are capable of"
+    "Causes inversed" : "because", # causes
+    "CausesDesire inversed": "because", # "makes someone want",
+    "CreatedBy inversed": "create", # "is created by",
+    "Desires inversed": "is desired by", # "desires",
+    "HasA inversed": "is possessed by",# "has, possesses, or contains",
+    "HasFirstSubevent inversed": "is the beginning of", # "begins with the event or action",
+    "HasLastSubevent inversed": "is the end of", # "ends with the event or action",
+    "HasPrerequisite inversed": "is the prerequisite of",# "to do this, one requires",
+    "HasProperty inversed": "is the property of", # "can be characterized by being or having",
+    "HasSubEvent inversed" : "is included by",# "includes the event or action",
+    "HinderedBy inversed" : "hinder", #"can be hindered by",
+    "InstanceOf inversed" : "include", #" is an example or instance of", not sure about this.
+    "isAfter inversed" : "happens before", # "happens after",
+    "isBefore inversed" : "happens after", # "happens before",
+    "isFilledBy inversed" : "can fill",# "blank can be filled by",
+    "MadeOf inversed": "make up of", # "is made of", 
+    "MadeUpOf inversed": "is made of", # "made up of",
+    "MotivatedByGoal inversed": "motivate", # "is a step towards accomplishing the goal",
+    "NotDesires inversed": "is not desired by", # "do not desire",
+    "ObjectUse inversed": "could make use of", # "used for",
+    "UsedFor inversed": "could make use of", # "used for",
+    "oEffect inversed" : "because", #"as a result, PersonY or others will",
+    "oReact inversed" : "because", #"as a result, PersonY or others feel",
+    "oWant inversed" : "because", # "as a result, PersonY or others want to",
+    "PartOf inversed" : "include", # "is a part of",
+    "ReceivesAction inversed" : "affect", # "can receive or be affected by the action",
+    "xAttr inversed" : "", # "PersonX is seen as",
+    "xEffect inversed" : "because", # "as a result, PersonX will",
+    "xReact inversed" : "because", # "as a result, PersonX feels",
+    "xWant inversed" : "because",# "as a result, PersonX wants to",
+    "xNeed inversed" : "as a result, ",# "but before, PersonX needed",
+    "xIntent inversed" : "as a result, ", # "because PersonX wanted",
+    "xReason inversed" : "as a result, ",# "because",
+    "general Effect inversed" : "because", # "as a result, other people or things will",
+    "general Want inversed" : "because", # "as a result, other people or things want to",
+    "general React inversed" : "because", # "as a result, other people or things feel",
 }
 
 def read_jsonl_lines(input_file: str) -> List[dict]:
@@ -85,8 +124,10 @@ def read_jsonl_lines(input_file: str) -> List[dict]:
         lines = f.readlines()
         return [json.loads(l.strip()) for l in lines]
 
-# CSKB_POP COMET: CUDA_VISIBLE_DEVICES=2 EVAL_EVERY=100 TRAIN_BATCH_SIZE=32 DO_TRAIN=True DO_PRED=False TRAIN_DATA_PATH=data/kg/pop_cskb/trn.tsv DEV_DATA_PATH=data/kg/pop_cskb/dev.tsv OUT_DIR=data/models/gpt2large-comet-pop TOKENIZER=gpt2-large GPT2_MODEL=gpt2-large
-# COMET with NL relations: CUDA_VISIBLE_DEVICES=3 EVAL_EVERY=100 USE_NL_RELATION=True TRAIN_BATCH_SIZE=32 DO_TRAIN=True DO_PRED=False OUT_DIR=data/models/gpt2large-comet-nl-rel TOKENIZER=gpt2-large GPT2_MODEL=gpt2-large
+# 1. CSKB_POP COMET: CUDA_VISIBLE_DEVICES=2 EVAL_EVERY=100 TRAIN_BATCH_SIZE=32 DO_TRAIN=True DO_PRED=False TRAIN_DATA_PATH=data/kg/pop_cskb/trn.tsv DEV_DATA_PATH=data/kg/pop_cskb/dev.tsv OUT_DIR=data/models/gpt2large-comet-pop TOKENIZER=gpt2-large GPT2_MODEL=gpt2-large
+# 2. COMET with NL relations: CUDA_VISIBLE_DEVICES=3 EVAL_EVERY=100 USE_NL_RELATION=True TRAIN_BATCH_SIZE=32 DO_TRAIN=True DO_PRED=False OUT_DIR=data/models/gpt2large-comet-nl-rel TOKENIZER=gpt2-large GPT2_MODEL=gpt2-large
+# 3. COMET, NL, with inversed, PersonX/Y replaced:
+# CUDA_VISIBLE_DEVICES=2 USE_NL_RELATION=True TRAIN_BATCH_SIZE=32 DO_TRAIN=True DO_PRED=False OUT_DIR=data/models/gpt2large-comet-inv-xy-rev-nl-rel TOKENIZER=gpt2-large GPT2_MODEL=gpt2-large TRAIN_DATA_PATH=data/kg/atomic2020_data-feb2021/train_inversed_xy_reversed.tsv python models/comet_atomic2020_gpt2/comet_gpt2.py
 
 def main():
     # wandb.init(project="gpt2_comet_atomic")
@@ -120,6 +161,8 @@ def main():
 
     model_name = config.MODEL_NAME
     # model_name = "data/models/gpt2xl-comet-atomic-2020/"
+    if not os.path.exists(config.OUT_DIR):
+        os.mkdir(config.OUT_DIR)
 
     try:
         tokenizer = GPT2Tokenizer.from_pretrained(model_name)
