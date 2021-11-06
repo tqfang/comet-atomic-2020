@@ -14,4 +14,5 @@ OUT_DIR=models/comet_gpt2b_inversedPopAtomic2020 TOKENIZER=gpt2 GPT2_MODEL=model
 python models/comet_atomic2020_gpt2/comet_gpt2.py 
 
 # evaluate
-python eval/eval.py
+cd eval
+python eval.py
